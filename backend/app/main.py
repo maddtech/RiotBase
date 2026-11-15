@@ -4,12 +4,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import auth, bands
+from app.routers import auth, bands, songs_setlists
 
 app = FastAPI(title=settings.APP_NAME, version="0.1.0")
 
 app.include_router(auth.router)
 app.include_router(bands.router)
+app.include_router(songs_setlists.router)
 
 @app.get("/api/v1/health")
 def health_check():

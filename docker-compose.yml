@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    container_name: band-manager
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - band_data:/data
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      # Leave DATABASE_URL unset to default to sqlite:////data/app.db
+      - DATABASE_URL=${DATABASE_URL:-}
+      - ALLOW_PUBLIC_SIGNUP=${ALLOW_PUBLIC_SIGNUP:-false}
+
+  db:
+    image: postgres:16-alpine
+    container_name: band-manager-db
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bandapp
+      POSTGRES_PASSWORD: bandapp_secret
+      POSTGRES_DB: bandapp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  band_data:
+  postgres_data:
