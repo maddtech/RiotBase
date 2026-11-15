@@ -24,6 +24,11 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { BandMembersPage } from "./pages/BandMembersPage";
 import { SongsPage } from "./pages/SongsPage";
 import { SetlistsPage } from "./pages/SetlistsPage";
+import { MapPin } from "lucide-react";
+import { CalendarPage } from "./pages/CalendarPage";
+import { VenuesPage } from "./pages/VenuesPage";
+import { Settings } from "lucide-react";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const ProtectedShell: React.FC = () => {
   const { loading, status, user, activeBand, logout } = useApp();
@@ -62,6 +67,12 @@ const ProtectedShell: React.FC = () => {
               Blackouts
             </Link>
             <Link
+              to="/venues"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-zinc-800"
+            >
+              <MapPin className="w-4 h-4 text-zinc-400" /> Venues
+            </Link>
+            <Link
               to="/songs"
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-zinc-800"
             >
@@ -78,6 +89,12 @@ const ProtectedShell: React.FC = () => {
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-zinc-800"
             >
               <Users className="w-4 h-4 text-zinc-400" /> Members & Invites
+            </Link>
+            <Link
+              to="/settings"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-zinc-800"
+            >
+              <Settings className="w-4 h-4 text-zinc-400" /> Sync & Settings
             </Link>
           </nav>
         </div>
@@ -151,12 +168,11 @@ export default function App() {
           <Route element={<ProtectedShell />}>
             <Route path="/dashboard" element={<DashboardHome />} />
             <Route path="/members" element={<BandMembersPage />} />
-            <Route
-              path="/calendar"
-              element={<ComingSoon title="Calendar & Blackouts" />}
-            />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/venues" element={<VenuesPage />} />
             <Route path="/songs" element={<SongsPage />} />
             <Route path="/setlists" element={<SetlistsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

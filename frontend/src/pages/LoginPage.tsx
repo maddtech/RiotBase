@@ -8,18 +8,26 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { status, refreshSession } = useApp();
 
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
+      if (mode === "forgot") {
+        const res = await api.forgotPassword(email);
+        setInfo(res.detail);
+        return;
+      }
+
       const res =
         mode === "login"
           ? await api.login({ email, password })
@@ -40,13 +48,23 @@ export const LoginPage: React.FC = () => {
         <div className="flex items-center gap-3 mb-6">
           <Disc3 className="w-7 h-7 text-amber-400" />
           <h1 className="text-xl font-bold">
-            {mode === "login" ? "Sign In" : "Create Account"}
+            {mode === "login"
+              ? "Sign In"
+              : mode === "register"
+                ? "Create Account"
+                : "Reset Password"}
           </h1>
         </div>
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
             {error}
+          </div>
+        )}
+
+        {info && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm">
+            {info}
           </div>
         )}
 
@@ -64,6 +82,7 @@ export const LoginPage: React.FC = () => {
               />
             </div>
           )}
+
           <div>
             <label className="block text-sm text-zinc-300 mb-1">Email</label>
             <input
@@ -74,16 +93,22 @@ export const LoginPage: React.FC = () => {
               className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg focus:outline-none focus:border-amber-500"
             />
           </div>
-          <div>
-            <label className="block text-sm text-zinc-300 mb-1">Password</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg focus:outline-none focus:border-amber-500"
-            />
-          </div>
+
+          {mode !== "forgot" && (
+            <div>
+              <label className="block text-sm text-zinc-300 mb-1">
+                Password
+              </label>
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -93,24 +118,61 @@ export const LoginPage: React.FC = () => {
               ? "Please wait..."
               : mode === "login"
                 ? "Sign In"
-                : "Register"}
+                : mode === "register"
+                  ? "Register"
+                  : "Send Reset Email"}
           </button>
         </form>
 
         <div className="mt-5 pt-4 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
-          {status?.public_signup_enabled && (
+          {status?.public_signup_enabled && mode !== "register" && (
             <button
-              onClick={() => setMode(mode === "login" ? "register" : "login")}
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setError(null);
+                setInfo(null);
+              }}
               className="text-amber-400 hover:underline block cursor-pointer"
             >
-              {mode === "login"
-                ? "Need an account? Register here"
-                : "Already have an account? Sign in"}
+              Need an account? Register here
             </button>
           )}
-          <p>
-            Forgot your password? Ask your Band Admin for a one-time reset link.
-          </p>
+
+          {mode !== "login" && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError(null);
+                setInfo(null);
+              }}
+              className="text-amber-400 hover:underline block cursor-pointer"
+            >
+              Back to Sign In
+            </button>
+          )}
+
+          {status?.smtp_enabled ? (
+            mode === "login" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("forgot");
+                  setError(null);
+                  setInfo(null);
+                }}
+                className="text-zinc-300 hover:text-amber-400 hover:underline block cursor-pointer"
+              >
+                Forgot your password? Send a reset link via email
+              </button>
+            )
+          ) : (
+            <p>
+              Forgot your password? Ask your Band Admin for a one-time reset
+              link.
+            </p>
+          )}
         </div>
       </div>
     </div>

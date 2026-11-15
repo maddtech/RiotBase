@@ -90,6 +90,123 @@ export function formatDuration(totalSeconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+export interface VenueCandidate {
+  local_venue_id: string | null;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  timezone: string;
+  website: string | null;
+  external_source: "local" | "musicbrainz" | "osm" | "google";
+  external_id: string | null;
+}
+
+export interface Venue extends VenueCandidate {
+  id: string;
+  booking_contact: string | null;
+  load_in_notes: string | null;
+  payout_notes: string | null;
+}
+
+export interface BandEvent {
+  id: string;
+  band_id: string;
+  venue_id: string | null;
+  setlist_id: string | null;
+  event_type: "gig" | "rehearsal";
+  title: string;
+  status: "hold" | "confirmed" | "canceled";
+  start_at_utc: string;
+  end_at_utc: string | null;
+  timezone: string;
+  load_in_time: string | null;
+  soundcheck_time: string | null;
+  notes: string | null;
+  venue_name: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  setlist_name: string | null;
+}
+
+export interface Blackout {
+  id: string;
+  band_id: string;
+  user_id: string;
+  user_display_name: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+}
+
+export interface AdminSettings {
+  allow_public_signup: boolean;
+  has_google_places_key: boolean;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_user: string | null;
+  has_smtp_pass: boolean;
+  smtp_from: string | null;
+}
+
+export function formatEventTime(utcIso: string, venueTimezone: string): {
+  venueDisplay: string;
+  localDiffers: boolean;
+  userDisplay: string;
+} {
+  const normalizedIso =
+    utcIso.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(utcIso) ? utcIso : `${utcIso}Z`;
+  const date = new Date(normalizedIso);
+  const browserTz = getBrowserTimezone();
+
+  const venueDisplay = new Intl.DateTimeFormat("en-US", {
+    timeZone: venueTimezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+
+  const userDisplay = new Intl.DateTimeFormat("en-US", {
+    timeZone: browserTz,
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+
+  return {
+    venueDisplay,
+    localDiffers: browserTz !== venueTimezone,
+    userDisplay,
+  };
+}
+
+export function toLocalDateTimeInput(utcIso: string, venueTimezone: string): string {
+  const normalizedIso =
+    utcIso.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(utcIso) ? utcIso : `${utcIso}Z`;
+  const date = new Date(normalizedIso);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: venueTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "00";
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+}
+
 const TOKEN_KEY = "band_manager_token";
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -232,4 +349,92 @@ export const api = {
 
   deleteSetlist: (bandId: string, setlistId: string) =>
     request<void>(`/bands/${bandId}/setlists/${setlistId}`, { method: "DELETE" }),
+
+  searchVenues: (bandId: string, q: string) =>
+    request<VenueCandidate[]>(`/bands/${bandId}/venues/search?q=${encodeURIComponent(q)}`),
+
+  listVenues: (bandId: string) => request<Venue[]>(`/bands/${bandId}/venues`),
+
+  saveVenue: (bandId: string, data: Partial<VenueCandidate> & {
+    name: string;
+    booking_contact?: string;
+    load_in_notes?: string;
+    payout_notes?: string;
+  }) => request<Venue>(`/bands/${bandId}/venues`, { method: "POST", body: JSON.stringify(data) }),
+
+  listEvents: (bandId: string) => request<BandEvent[]>(`/bands/${bandId}/events`),
+
+  createEvent: (
+    bandId: string,
+    data: {
+      event_type: "gig" | "rehearsal";
+      title: string;
+      status: "hold" | "confirmed" | "canceled";
+      venue_id?: string | null;
+      setlist_id?: string | null;
+      local_start: string;
+      local_end?: string | null;
+      timezone: string;
+      load_in_time?: string;
+      soundcheck_time?: string;
+      notes?: string;
+    }
+  ) => request<BandEvent>(`/bands/${bandId}/events`, { method: "POST", body: JSON.stringify(data) }),
+
+  deleteEvent: (bandId: string, eventId: string) =>
+    request<void>(`/bands/${bandId}/events/${eventId}`, { method: "DELETE" }),
+
+  listBlackouts: (bandId: string) => request<Blackout[]>(`/bands/${bandId}/blackouts`),
+
+  createBlackout: (bandId: string, data: { start_date: string; end_date: string; reason?: string }) =>
+    request<Blackout>(`/bands/${bandId}/blackouts`, { method: "POST", body: JSON.stringify(data) }),
+
+  deleteBlackout: (bandId: string, blackoutId: string) =>
+    request<void>(`/bands/${bandId}/blackouts/${blackoutId}`, { method: "DELETE" }),  
+
+  rotateIcalToken: (bandId: string) =>
+    request<{ ical_token: string }>(`/bands/${bandId}/ical/rotate`, { method: "POST" }),
+
+  exportBandBackup: (bandId: string) => request<Record<string, unknown>>(`/bands/${bandId}/export`),
+
+  notifyEventMembers: (bandId: string, eventId: string) =>
+    request<{ sent_to_count: number }>(`/bands/${bandId}/events/${eventId}/notify`, { method: "POST" }),
+
+  forgotPassword: (email: string) =>
+    request<{ detail: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  getAdminSettings: () => request<AdminSettings>("/admin/settings"),
+
+  updateAdminSettings: (data: {
+    allow_public_signup?: boolean;
+    google_places_api_key?: string;
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_user?: string;
+    smtp_pass?: string;
+    smtp_from?: string;
+  }) => request<AdminSettings>("/admin/settings", { method: "PATCH", body: JSON.stringify(data) }),
+
+  testSmtp: () => request<{ status: string }>("/admin/settings/test-smtp", { method: "POST" }),
+
+  updateEvent: (
+    bandId: string,
+    eventId: string,
+    data: {
+      event_type?: "gig" | "rehearsal";
+      title?: string;
+      status?: "hold" | "confirmed" | "canceled";
+      venue_id?: string | null;
+      setlist_id?: string | null;
+      local_start?: string;
+      local_end?: string | null;
+      timezone?: string;
+      load_in_time?: string | null;
+      soundcheck_time?: string | null;
+      notes?: string | null;
+    }
+  ) => request<BandEvent>(`/bands/${bandId}/events/${eventId}`, { method: "PATCH", body: JSON.stringify(data) }),
 };
