@@ -29,6 +29,7 @@ import { CalendarPage } from "./pages/CalendarPage";
 import { VenuesPage } from "./pages/VenuesPage";
 import { Settings } from "lucide-react";
 import { SettingsPage } from "./pages/SettingsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 
 const ProtectedShell: React.FC = () => {
   const { loading, status, user, activeBand, logout } = useApp();
@@ -166,7 +167,7 @@ export default function App() {
             element={<ResetPasswordPage />}
           />
           <Route element={<ProtectedShell />}>
-            <Route path="/dashboard" element={<DashboardHome />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/members" element={<BandMembersPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/venues" element={<VenuesPage />} />

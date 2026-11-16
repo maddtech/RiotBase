@@ -300,10 +300,10 @@ export const CalendarPage: React.FC = () => {
                       </label>
                       {ev.setlist_id && (
                         <Link
-                          to="/setlists"
+                          to={`/setlists?setlist=${ev.setlist_id}`}
                           className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1"
                         >
-                          Open Setlists <ExternalLink className="w-3 h-3" />
+                          Open Setlist <ExternalLink className="w-3 h-3" />
                         </Link>
                       )}
                     </div>

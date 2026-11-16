@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api, formatDuration, type Setlist, type Song } from "../api/client";
 import { useApp } from "../context/AppContext";
+import { useSearchParams } from "react-router-dom";
 
 interface DraftItem {
   key: string;
@@ -33,6 +34,8 @@ export const SetlistsPage: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stageMode, setStageMode] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSetlistId = searchParams.get("setlist");
 
   const loadAll = async () => {
     if (!activeBand) return;
@@ -42,13 +45,22 @@ export const SetlistsPage: React.FC = () => {
     ]);
     setSetlists(lists);
     setSongs(catalog);
-    if (lists.length > 0 && !lists.some((l) => l.id === selectedId)) {
-      selectSetlist(lists[0]);
+
+    if (lists.length > 0) {
+      const requested = requestedSetlistId
+        ? lists.find((l) => l.id === requestedSetlistId)
+        : null;
+      if (requested) {
+        selectSetlist(requested);
+      } else if (!lists.some((l) => l.id === selectedId)) {
+        selectSetlist(lists[0]);
+      }
     }
   };
 
   const selectSetlist = (sl: Setlist) => {
     setSelectedId(sl.id);
+    setSearchParams({ setlist: sl.id }, { replace: true });
     setDraftItems(
       sl.items.map((item, i) => ({
         key: item.id || `${Date.now()}-${i}`,
