@@ -43,3 +43,10 @@ def generate_one_time_token() -> tuple[str, str]:
 
 def hash_one_time_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def is_expired(expires_at: datetime | None) -> bool:
+    if expires_at is None:
+        return False
+    aware_exp = expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
+    return aware_exp < datetime.now(timezone.utc)

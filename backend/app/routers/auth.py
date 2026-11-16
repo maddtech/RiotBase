@@ -29,6 +29,7 @@ from app.security import (
     hash_one_time_token,
     hash_password,
     verify_password,
+    is_expired,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["system-and-auth"])
@@ -119,13 +120,16 @@ def register_user(
     if db.query(User.id).first() is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Complete /setup first")
 
+
     invite: BandInvite | None = None
     if payload.invite_token:
         invite = db.query(BandInvite).filter(BandInvite.token == payload.invite_token).first()
         if not invite:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invite link")
-        if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
+        # if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+        #     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
+        if is_expired(invite.expires_at):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invite link has expired")
         if invite.max_uses is not None and invite.use_count >= invite.max_uses:
             raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link max uses reached")
     elif not (inst.allow_public_signup or settings.ALLOW_PUBLIC_SIGNUP):
@@ -161,8 +165,11 @@ def consume_password_reset(payload: PasswordResetRequest, db: Session = Depends(
     reset = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == digest).first()
 
     now = datetime.now(timezone.utc)
-    if not reset or reset.used_at is not None or reset.expires_at < now:
+    # if not reset or reset.used_at is not None or reset.expires_at < now:
+    if not reset or reset.used_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link")
+    if is_expired(reset.expires_at):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset token has expired")
 
     user = db.get(User, reset.user_id)
     if not user:

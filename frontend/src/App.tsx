@@ -132,27 +132,27 @@ const SetupGuard: React.FC = () => {
   return <SetupWizard />;
 };
 
-const DashboardHome: React.FC = () => {
-  const { activeBand } = useApp();
-  return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-bold">{activeBand?.name} Dashboard</h1>
-      <p className="text-sm text-zinc-400">
-        Phase 1 foundation active • Home timezone:{" "}
-        <span className="font-mono">{activeBand?.default_timezone}</span>
-      </p>
-    </div>
-  );
-};
+// const DashboardHome: React.FC = () => {
+//   const { activeBand } = useApp();
+//   return (
+//     <div className="space-y-2">
+//       <h1 className="text-2xl font-bold">{activeBand?.name} Dashboard</h1>
+//       <p className="text-sm text-zinc-400">
+//         Phase 1 foundation active • Home timezone:{" "}
+//         <span className="font-mono">{activeBand?.default_timezone}</span>
+//       </p>
+//     </div>
+//   );
+// };
 
-const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
-  <div>
-    <h1 className="text-2xl font-bold">{title}</h1>
-    <p className="text-sm text-zinc-400 mt-1">
-      Ready for Phase 2/3 vertical slice.
-    </p>
-  </div>
-);
+// const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
+//   <div>
+//     <h1 className="text-2xl font-bold">{title}</h1>
+//     <p className="text-sm text-zinc-400 mt-1">
+//       Ready for Phase 2/3 vertical slice.
+//     </p>
+//   </div>
+// );
 
 export default function App() {
   return (

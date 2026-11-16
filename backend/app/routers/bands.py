@@ -20,7 +20,7 @@ from app.schemas.auth_bands import (
     InvitePreviewOut,
     MemberRoleUpdate,
 )
-from app.security import generate_one_time_token
+from app.security import generate_one_time_token, is_expired
 
 router = APIRouter(prefix="/api/v1", tags=["bands-and-invites"])
 
@@ -184,10 +184,12 @@ def preview_invite(token: str, db: Session = Depends(get_db)):
     invite = db.query(BandInvite).filter(BandInvite.token == token).first()
     if not invite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
-    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
+    # if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+    #     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
     if invite.max_uses is not None and invite.use_count >= invite.max_uses:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link max uses reached")
+    if is_expired(invite.expires_at):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
 
     band = db.get(Band, invite.band_id)
     return InvitePreviewOut(
@@ -207,10 +209,12 @@ def accept_invite_existing_user(
     invite = db.query(BandInvite).filter(BandInvite.token == token).first()
     if not invite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
-    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
+    # if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+    #     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
     if invite.max_uses is not None and invite.use_count >= invite.max_uses:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link max uses reached")
+    if is_expired(invite.expires_at):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite link has expired")
 
     existing = (
         db.query(BandMember)
