@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Calendar,
   Check,
   Copy,
@@ -7,14 +8,27 @@ import {
   RefreshCw,
   Send,
   Server,
+  Upload,
 } from "lucide-react";
-import { api, type AdminSettings } from "../api/client";
+import { api, type AdminSettings, type BandImportResult } from "../api/client";
 import { useApp } from "../context/AppContext";
 
 export const SettingsPage: React.FC = () => {
   const { activeBand, user, refreshSession } = useApp();
   const [copiedIcal, setCopiedIcal] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Band JSON Import state
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importRaw, setImportRaw] = useState<Record<string, any> | null>(null);
+  const [importFileName, setImportFileName] = useState<string>("");
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [updateBandProfile, setUpdateBandProfile] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<BandImportResult | null>(
+    null,
+  );
+  const [importErr, setImportErr] = useState<string | null>(null);
 
   // Instance Admin BYOK Settings state
   const [adminCfg, setAdminCfg] = useState<AdminSettings | null>(null);
@@ -77,6 +91,80 @@ export const SettingsPage: React.FC = () => {
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleSelectImportFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setImportErr(null);
+    setImportResult(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error(
+          "Invalid JSON structure: expected a RiotBase backup object.",
+        );
+      }
+      const hasKnownSection = [
+        "songs",
+        "setlists",
+        "venues",
+        "events",
+        "blackouts",
+      ].some((k) => Array.isArray(parsed[k]));
+      if (!hasKnownSection) {
+        throw new Error(
+          "File does not contain valid RiotBase backup sections (songs, setlists, venues, events, or blackouts).",
+        );
+      }
+      setImportRaw(parsed);
+      setImportFileName(file.name);
+    } catch (err: any) {
+      setImportRaw(null);
+      setImportFileName("");
+      setImportErr(err.message || "Failed to parse JSON file.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRunImport = async () => {
+    if (!importRaw) return;
+    if (
+      importMode === "replace" &&
+      !confirm(
+        `Replace ALL existing songs, setlists, events, blackouts, and venue notes for ${activeBand.name}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setImporting(true);
+    setImportErr(null);
+    setImportResult(null);
+    try {
+      const res = await api.importBandBackup(activeBand.id, {
+        mode: importMode,
+        update_band_profile: updateBandProfile,
+        data: importRaw,
+      });
+      setImportResult(res);
+      setImportRaw(null);
+      setImportFileName("");
+      await refreshSession();
+    } catch (err: any) {
+      setImportErr(err.message || "Import failed.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -186,6 +274,192 @@ export const SettingsPage: React.FC = () => {
           {exporting ? "Exporting..." : "Download JSON Backup"}
         </button>
       </section>
+
+      {/* 2b. Band JSON Backup Import (Band Admins Only) */}
+      {activeBand.my_role === "admin" && (
+        <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-bold text-base">Import Band Data Backup</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Restore or merge songs, setlists, venues, events, and blackouts
+                from a RiotBase JSON export into {activeBand.name}.
+              </p>
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleSelectImportFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg text-sm flex items-center gap-2 cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-amber-400" />
+                Select JSON File
+              </button>
+            </div>
+          </div>
+
+          {importErr && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-lg">
+              {importErr}
+            </div>
+          )}
+
+          {importResult && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs rounded-lg space-y-1">
+              <div className="font-semibold">
+                Import complete (
+                {importResult.mode === "merge" ? "Merged" : "Replaced"}):
+              </div>
+              <div>
+                {importResult.counts.songs} songs,{" "}
+                {importResult.counts.setlists} setlists,{" "}
+                {importResult.counts.venues} venues,{" "}
+                {importResult.counts.events} events,{" "}
+                {importResult.counts.blackouts} blackouts
+                {importResult.counts.skipped_blackouts > 0 &&
+                  ` (${importResult.counts.skipped_blackouts} blackouts skipped — user not in band)`}
+              </div>
+            </div>
+          )}
+
+          {importRaw && (
+            <div className="p-4 bg-zinc-950 border border-zinc-700 rounded-lg space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                <div>
+                  <div className="text-xs font-mono text-amber-400">
+                    {importFileName}
+                  </div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    {importRaw.band?.name
+                      ? `Source band: ${importRaw.band.name}`
+                      : "RiotBase JSON Snapshot"}
+                    {importRaw.exported_at_utc &&
+                      ` • Exported ${new Date(importRaw.exported_at_utc).toLocaleString()}`}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportRaw(null);
+                    setImportFileName("");
+                  }}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Record Count Preview Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                {[
+                  { label: "Songs", count: importRaw.songs?.length ?? 0 },
+                  { label: "Setlists", count: importRaw.setlists?.length ?? 0 },
+                  { label: "Venues", count: importRaw.venues?.length ?? 0 },
+                  { label: "Events", count: importRaw.events?.length ?? 0 },
+                  {
+                    label: "Blackouts",
+                    count: importRaw.blackouts?.length ?? 0,
+                  },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg"
+                  >
+                    <div className="text-base font-bold text-zinc-100">
+                      {stat.count}
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      {stat.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Import Mode & Options */}
+              <div className="space-y-2.5 text-xs">
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === "merge"}
+                      onChange={() => setImportMode("merge")}
+                      className="accent-amber-500"
+                    />
+                    <span>
+                      <strong className="text-zinc-200">Merge / Upsert</strong>{" "}
+                      <span className="text-zinc-400">
+                        (Add new & update matching records)
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === "replace"}
+                      onChange={() => setImportMode("replace")}
+                      className="accent-amber-500"
+                    />
+                    <span>
+                      <strong className="text-zinc-200">Replace All</strong>{" "}
+                      <span className="text-zinc-400">
+                        (Wipe current band data first)
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {importMode === "replace" && (
+                  <div className="flex items-center gap-2 text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-lg">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>
+                      Replace mode deletes all existing songs, setlists, events,
+                      blackouts, and private venue notes for {activeBand.name}{" "}
+                      before importing.
+                    </span>
+                  </div>
+                )}
+
+                {importRaw.band && (
+                  <label className="flex items-center gap-2 text-zinc-300 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={updateBandProfile}
+                      onChange={(e) => setUpdateBandProfile(e.target.checked)}
+                      className="accent-amber-500"
+                    />
+                    Also update band city, state, and default timezone from
+                    backup
+                  </label>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleRunImport}
+                  disabled={importing}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-lg text-sm cursor-pointer"
+                >
+                  {importing
+                    ? "Importing..."
+                    : importMode === "merge"
+                      ? "Merge Into Band"
+                      : "Replace & Restore Band"}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 3. Instance Admin Optional BYOK Settings */}
       {user?.is_instance_admin && adminCfg && (

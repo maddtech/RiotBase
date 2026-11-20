@@ -153,6 +153,19 @@ export interface AdminSettings {
   smtp_from: string | null;
 }
 
+export interface BandImportResult {
+  status: string;
+  mode: "merge" | "replace";
+  counts: {
+    songs: number;
+    setlists: number;
+    venues: number;
+    events: number;
+    blackouts: number;
+    skipped_blackouts: number;
+  };
+}
+
 export function formatEventTime(utcIso: string, venueTimezone: string): {
   venueDisplay: string;
   localDiffers: boolean;
@@ -396,6 +409,19 @@ export const api = {
     request<{ ical_token: string }>(`/bands/${bandId}/ical/rotate`, { method: "POST" }),
 
   exportBandBackup: (bandId: string) => request<Record<string, unknown>>(`/bands/${bandId}/export`),
+
+  importBandBackup: (
+    bandId: string,
+    payload: {
+      mode: "merge" | "replace";
+      update_band_profile: boolean;
+      data: Record<string, unknown>;
+    },
+  ) =>
+    request<BandImportResult>(`/api/v1/bands/${bandId}/import`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   notifyEventMembers: (bandId: string, eventId: string) =>
     request<{ sent_to_count: number }>(`/bands/${bandId}/events/${eventId}/notify`, { method: "POST" }),
