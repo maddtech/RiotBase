@@ -3,7 +3,13 @@ import { ChevronDown, Plus } from "lucide-react";
 import { api, getBrowserTimezone } from "../api/client";
 import { useApp } from "../context/AppContext";
 
-export const BandSwitcher: React.FC = () => {
+interface BandSwitcherProps {
+  collapsed?: boolean;
+}
+
+export const BandSwitcher: React.FC<BandSwitcherProps> = ({
+  collapsed = false,
+}) => {
   const { bands, activeBand, setActiveBandId, refreshSession } = useApp();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -28,25 +34,46 @@ export const BandSwitcher: React.FC = () => {
     setNewState("");
   };
 
+  const initials = (activeBand?.name || "RB")
+    .split(/[\s*-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-left cursor-pointer"
-      >
-        <div className="truncate">
-          <div className="font-semibold text-sm text-zinc-100 truncate">
-            {activeBand?.name || "Select Band"}
+      {collapsed ? (
+        <button
+          onClick={() => setOpen(!open)}
+          title={`${activeBand?.name || "Select Band"} (${activeBand?.my_role || ""})`}
+          className="w-10 h-10 mx-auto flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-bold text-amber-400 cursor-pointer"
+        >
+          {initials || "RB"}
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-left cursor-pointer"
+        >
+          <div className="truncate">
+            <div className="font-semibold text-sm text-zinc-100 truncate">
+              {activeBand?.name || "Select Band"}
+            </div>
+            <div className="text-xs text-zinc-400 capitalize">
+              {activeBand?.my_role}
+            </div>
           </div>
-          <div className="text-xs text-zinc-400 capitalize">
-            {activeBand?.my_role}
-          </div>
-        </div>
-        <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
-      </button>
+          <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+        </button>
+      )}
 
       {open && (
-        <div className="absolute left-0 right-0 mt-1.5 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-20 p-1.5 space-y-1">
+        <div
+          className={`mt-1.5 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-30 p-1.5 space-y-1 ${
+            collapsed ? "fixed left-16 top-4 w-56" : "absolute left-0 right-0"
+          }`}
+        >
           {bands.map((b) => (
             <button
               key={b.id}
