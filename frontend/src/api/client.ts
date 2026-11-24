@@ -418,7 +418,7 @@ export const api = {
       data: Record<string, unknown>;
     },
   ) =>
-    request<BandImportResult>(`/api/v1/bands/${bandId}/import`, {
+    request<BandImportResult>(`/bands/${bandId}/import`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
