@@ -163,6 +163,8 @@ class Event(Base):
     load_in_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
     soundcheck_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    flyer_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    flyer_content_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     band: Mapped["Band"] = relationship(back_populates="events")

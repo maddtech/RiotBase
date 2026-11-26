@@ -106,6 +106,8 @@ class EventOut(BaseModel):
     load_in_time: str | None
     soundcheck_time: str | None
     notes: str | None
+    flyer_filename: str | None = None
+    flyer_content_type: str | None = None
 
     venue_name: str | None = None
     venue_city: str | None = None

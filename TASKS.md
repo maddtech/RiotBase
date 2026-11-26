@@ -9,12 +9,15 @@
 ---
 
 ## Phase 1 : v1.1.0 - Core UI\UX updates
-- [ ] **Setlist Proportional Time Block Bar:** Visual timeline bar in the Setlist Builder rendering each song, break, and encore proportionally to its duration against a configurable target set cap (e.g., 30 / 45 / 60 min).
-- [ ] **Event Flyer Attachments:** Upload, preview, and download show flyers (`JPG`, `PNG`, `WebP`) on Event records, persisted in `/data/uploads/flyers/{band_id}/` and referenced in JSON backups.
+- [x] **Event Flyer Attachments:** Upload, preview, and download show flyers (`JPG`, `PNG`, `WebP`) on Event records, persisted in `/data/uploads/flyers/{band_id}/` and referenced in JSON backups.
 - [ ] **Band Module Toggle Framework:**
    - [ ] `enabled_modules` JSON column on `Band` with Band Admin toggle controls in **Settings** (`PATCH /api/v1/bands/{band_id}/modules`).
    - [ ] `require_module("<key>")` FastAPI dependency guard and React `MODULE_REGISTRY` lazy-loaded navigation.
    - [ ] Non-destructive toggles: disabling a module hides UI routes and blocks API endpoints without deleting underlying database rows.
+
+## Completed
+- **Event Flyer Attachments (v1.1.0):** Added single-flyer upload/preview/download/delete per event with Pillow verification (`JPG`, `PNG`, `WebP`, up to 10 MB), EXIF orientation normalization & metadata stripping, `/data/uploads/flyers/{band_id}/` storage, disk cleanup on replace/delete, and JSON backup export/import references.
+  - Modified/added: `backend/requirements.txt`, `backend/app/models/core.py`, `backend/alembic/versions/9c4e7f2a1d8b_add_event_flyer_columns.py`, `backend/app/services/flyer_storage.py`, `backend/app/schemas/calendar_venues.py`, `backend/app/routers/calendar_venues.py`, `backend/app/routers/utilities_admin.py`, `frontend/src/api/client.ts`, `frontend/src/components/EventFlyerPreview.tsx`, `frontend/src/pages/CalendarPage.tsx`, `frontend/src/pages/DashboardPage.tsx`.
 
 
 

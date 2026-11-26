@@ -1,6 +1,7 @@
 import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -219,6 +220,9 @@ def export_band_backup(
                 "load_in_time": e.load_in_time,
                 "soundcheck_time": e.soundcheck_time,
                 "notes": e.notes,
+                "flyer_filename": e.flyer_filename,
+                "flyer_content_type": e.flyer_content_type,
+                "flyer_path": f"uploads/flyers/{band.id}/{e.flyer_filename}" if e.flyer_filename else None,
             }
             for e in events
         ],
@@ -654,6 +658,19 @@ def import_band_backup(
             ev_status = e_in.get("status") if e_in.get("status") in {"hold", "confirmed", "canceled"} else "confirmed"
             ev_tz = _safe_timezone(e_in.get("timezone"), band.default_timezone)
 
+            raw_flyer_fn = _clean_str(e_in.get("flyer_filename"), 255)
+            safe_flyer_fn: str | None = None
+            if raw_flyer_fn:
+                candidate_fn = Path(raw_flyer_fn).name
+                if candidate_fn == raw_flyer_fn and Path(candidate_fn).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+                    safe_flyer_fn = candidate_fn
+            raw_flyer_ct = _clean_str(e_in.get("flyer_content_type"), 64)
+            safe_flyer_ct = (
+                raw_flyer_ct
+                if safe_flyer_fn and raw_flyer_ct in {"image/jpeg", "image/png", "image/webp"}
+                else None
+            )
+
             ev_key = (title.lower(), start_utc)
             event = events_by_id.get(incoming_id) if incoming_id else None
             if not event and payload.mode == "merge":
@@ -671,6 +688,9 @@ def import_band_backup(
                 event.load_in_time = _clean_str(e_in.get("load_in_time"), 20)
                 event.soundcheck_time = _clean_str(e_in.get("soundcheck_time"), 20)
                 event.notes = _clean_str(e_in.get("notes"))
+                if "flyer_filename" in e_in:
+                    event.flyer_filename = safe_flyer_fn
+                    event.flyer_content_type = safe_flyer_ct
             else:
                 event = Event(
                     id=_allocate_id(Event, incoming_id, db, allocated_event_ids),
@@ -686,6 +706,8 @@ def import_band_backup(
                     load_in_time=_clean_str(e_in.get("load_in_time"), 20),
                     soundcheck_time=_clean_str(e_in.get("soundcheck_time"), 20),
                     notes=_clean_str(e_in.get("notes")),
+                    flyer_filename=safe_flyer_fn,
+                    flyer_content_type=safe_flyer_ct,
                 )
                 db.add(event)
                 db.flush()

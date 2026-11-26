@@ -19,6 +19,7 @@ import {
   type Setlist,
   type Song,
 } from "../api/client";
+import { EventFlyerThumbnail } from "../components/EventFlyerPreview";
 import { useApp } from "../context/AppContext";
 
 export const DashboardPage: React.FC = () => {
@@ -214,34 +215,47 @@ export const DashboardPage: React.FC = () => {
               )}
             </div>
 
-            <div>
-              <h3 className="text-xl font-bold text-zinc-100">
-                {nextEvent.title}
-              </h3>
-              <p className="text-sm text-amber-300 font-medium mt-0.5">
-                {
-                  formatEventTime(nextEvent.start_at_utc, nextEvent.timezone)
-                    .venueDisplay
-                }
-              </p>
-            </div>
+            <div className="flex items-start gap-4">
+              {nextEvent.flyer_filename && (
+                <EventFlyerThumbnail
+                  bandId={activeBand.id}
+                  eventId={nextEvent.id}
+                  eventTitle={nextEvent.title}
+                  flyerFilename={nextEvent.flyer_filename}
+                  size="md"
+                />
+              )}
+              <div className="space-y-2 min-w-0 flex-1">
+                <div>
+                  <h3 className="text-xl font-bold text-zinc-100">
+                    {nextEvent.title}
+                  </h3>
+                  <p className="text-sm text-amber-300 font-medium mt-0.5">
+                    {
+                      formatEventTime(nextEvent.start_at_utc, nextEvent.timezone)
+                        .venueDisplay
+                    }
+                  </p>
+                </div>
 
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
-              {nextEvent.venue_name && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-                  {nextEvent.venue_name}
-                  {nextEvent.venue_city
-                    ? ` (${[nextEvent.venue_city, nextEvent.venue_state].filter(Boolean).join(", ")})`
-                    : ""}
-                </span>
-              )}
-              {nextEvent.load_in_time && (
-                <span>Load-in: {nextEvent.load_in_time}</span>
-              )}
-              {nextEvent.soundcheck_time && (
-                <span>Soundcheck: {nextEvent.soundcheck_time}</span>
-              )}
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
+                  {nextEvent.venue_name && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+                      {nextEvent.venue_name}
+                      {nextEvent.venue_city
+                        ? ` (${[nextEvent.venue_city, nextEvent.venue_state].filter(Boolean).join(", ")})`
+                        : ""}
+                    </span>
+                  )}
+                  {nextEvent.load_in_time && (
+                    <span>Load-in: {nextEvent.load_in_time}</span>
+                  )}
+                  {nextEvent.soundcheck_time && (
+                    <span>Soundcheck: {nextEvent.soundcheck_time}</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {nextEventConflicts.length > 0 && (

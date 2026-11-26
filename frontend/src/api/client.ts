@@ -127,6 +127,8 @@ export interface BandEvent {
   load_in_time: string | null;
   soundcheck_time: string | null;
   notes: string | null;
+  flyer_filename: string | null;
+  flyer_content_type: string | null;
   venue_name: string | null;
   venue_city: string | null;
   venue_state: string | null;
@@ -396,6 +398,53 @@ export const api = {
 
   deleteEvent: (bandId: string, eventId: string) =>
     request<void>(`/bands/${bandId}/events/${eventId}`, { method: "DELETE" }),
+
+  uploadEventFlyer: async (bandId: string, eventId: string, file: File): Promise<BandEvent> => {
+    const token = getToken();
+    const headers: Record<string, string> = {
+      "X-Timezone": getBrowserTimezone(),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch(`/api/v1/bands/${bandId}/events/${eventId}/flyer`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      if (res.status === 401 && token) {
+        clearToken();
+      }
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Flyer upload failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  deleteEventFlyer: (bandId: string, eventId: string) =>
+    request<BandEvent>(`/bands/${bandId}/events/${eventId}/flyer`, { method: "DELETE" }),
+
+  fetchEventFlyerBlob: async (bandId: string, eventId: string): Promise<Blob> => {
+    const token = getToken();
+    const headers: Record<string, string> = {
+      "X-Timezone": getBrowserTimezone(),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`/api/v1/bands/${bandId}/events/${eventId}/flyer`, {
+      headers,
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Failed to load flyer (${res.status})`);
+    }
+    return res.blob();
+  },
 
   listBlackouts: (bandId: string) => request<Blackout[]>(`/bands/${bandId}/blackouts`),
 

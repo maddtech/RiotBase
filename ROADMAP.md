@@ -25,7 +25,6 @@ All releases preserve backward compatibility with existing SQLite (`/data/app.db
 
 ### v1.1.0 — Core UX Polish & Module Foundation *(Next)*
 Establishes the plugin-style module toggle system alongside high-value gig preparation enhancements:
-- **Setlist Proportional Time Block Bar:** Visual timeline bar in the Setlist Builder rendering each song, break, and encore proportionally to its duration against a configurable target set cap (e.g., 30 / 45 / 60 min).
 - **Event Flyer Attachments:** Upload, preview, and download show flyers (`JPG`, `PNG`, `WebP`) on Event records, persisted in `/data/uploads/flyers/{band_id}/` and referenced in JSON backups.
 - **Band Module Toggle Framework:**
   - `enabled_modules` JSON column on `Band` with Band Admin toggle controls in **Settings** (`PATCH /api/v1/bands/{band_id}/modules`).

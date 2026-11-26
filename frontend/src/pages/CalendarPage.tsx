@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   CalendarOff,
   CalendarPlus,
+  Download,
   Edit2,
   ExternalLink,
+  ImagePlus,
   ListMusic,
   Mail,
   MapPin,
@@ -21,6 +23,10 @@ import {
   type Setlist,
   type Venue,
 } from "../api/client";
+import {
+  downloadEventFlyer,
+  EventFlyerThumbnail,
+} from "../components/EventFlyerPreview";
 import { VenueAutocomplete } from "../components/VenueAutocomplete";
 import { useApp } from "../context/AppContext";
 
@@ -48,6 +54,16 @@ export const CalendarPage: React.FC = () => {
   const [soundcheckTime, setSoundcheckTime] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Event flyer upload state inside Create / Edit modal
+  const flyerInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingFlyerFile, setPendingFlyerFile] = useState<File | null>(null);
+  const [pendingFlyerPreview, setPendingFlyerPreview] = useState<string | null>(
+    null,
+  );
+  const [removeExistingFlyer, setRemoveExistingFlyer] = useState(false);
+  const [flyerError, setFlyerError] = useState<string | null>(null);
+  const [savingEvent, setSavingEvent] = useState(false);
+
   // Blackout modal state
   const [blackoutModalOpen, setBlackoutModalOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -74,7 +90,21 @@ export const CalendarPage: React.FC = () => {
 
   if (!activeBand) return null;
 
+  const clearPendingFlyer = () => {
+    if (pendingFlyerPreview) {
+      URL.revokeObjectURL(pendingFlyerPreview);
+    }
+    setPendingFlyerFile(null);
+    setPendingFlyerPreview(null);
+    setRemoveExistingFlyer(false);
+    setFlyerError(null);
+    if (flyerInputRef.current) {
+      flyerInputRef.current.value = "";
+    }
+  };
+
   const openCreateModal = () => {
+    clearPendingFlyer();
     setEditingEvent(null);
     setEventType("gig");
     setTitle("");
@@ -90,6 +120,7 @@ export const CalendarPage: React.FC = () => {
   };
 
   const openEditModal = (ev: BandEvent) => {
+    clearPendingFlyer();
     setEditingEvent(ev);
     setEventType(ev.event_type);
     setTitle(ev.title);
@@ -106,6 +137,32 @@ export const CalendarPage: React.FC = () => {
     setEventModalOpen(true);
   };
 
+  const handleSelectFlyerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFlyerError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setFlyerError("Only JPG, PNG, and WebP flyer images are supported.");
+      if (flyerInputRef.current) flyerInputRef.current.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFlyerError("Flyer file must be 10 MB or smaller.");
+      if (flyerInputRef.current) flyerInputRef.current.value = "";
+      return;
+    }
+
+    if (pendingFlyerPreview) {
+      URL.revokeObjectURL(pendingFlyerPreview);
+    }
+    setPendingFlyerFile(file);
+    setPendingFlyerPreview(URL.createObjectURL(file));
+    setRemoveExistingFlyer(false);
+    if (flyerInputRef.current) flyerInputRef.current.value = "";
+  };
+
   const handleVenuePicked = (v: Venue | null) => {
     setSelectedVenue(v);
     if (v) {
@@ -120,33 +177,51 @@ export const CalendarPage: React.FC = () => {
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = {
-      event_type: eventType,
-      title: title.trim(),
-      status,
-      venue_id: selectedVenue?.id || null,
-      setlist_id: setlistId || null,
-      local_start: localStart,
-      timezone,
-      load_in_time: loadInTime.trim() || null,
-      soundcheck_time: soundcheckTime.trim() || null,
-      notes: notes.trim() || null,
-    };
+    setFlyerError(null);
+    setSavingEvent(true);
+    try {
+      const payload = {
+        event_type: eventType,
+        title: title.trim(),
+        status,
+        venue_id: selectedVenue?.id || null,
+        setlist_id: setlistId || null,
+        local_start: localStart,
+        timezone,
+        load_in_time: loadInTime.trim() || null,
+        soundcheck_time: soundcheckTime.trim() || null,
+        notes: notes.trim() || null,
+      };
 
-    if (editingEvent) {
-      await api.updateEvent(activeBand.id, editingEvent.id, payload);
-    } else {
-      await api.createEvent(activeBand.id, {
-        ...payload,
-        load_in_time: payload.load_in_time || undefined,
-        soundcheck_time: payload.soundcheck_time || undefined,
-        notes: payload.notes || undefined,
-      });
+      const saved = editingEvent
+        ? await api.updateEvent(activeBand.id, editingEvent.id, payload)
+        : await api.createEvent(activeBand.id, {
+            ...payload,
+            load_in_time: payload.load_in_time || undefined,
+            soundcheck_time: payload.soundcheck_time || undefined,
+            notes: payload.notes || undefined,
+          });
+
+      if (pendingFlyerFile) {
+        await api.uploadEventFlyer(activeBand.id, saved.id, pendingFlyerFile);
+      } else if (
+        editingEvent &&
+        editingEvent.flyer_filename &&
+        removeExistingFlyer
+      ) {
+        await api.deleteEventFlyer(activeBand.id, saved.id);
+      }
+
+      clearPendingFlyer();
+      setEventModalOpen(false);
+      setEditingEvent(null);
+      await loadData();
+    } catch (err: any) {
+      setFlyerError(err.message || "Failed to save event or flyer.");
+      await loadData();
+    } finally {
+      setSavingEvent(false);
     }
-
-    setEventModalOpen(false);
-    setEditingEvent(null);
-    await loadData();
   };
 
   const handleQuickSetlistChange = async (
@@ -232,7 +307,17 @@ export const CalendarPage: React.FC = () => {
                   key={ev.id}
                   className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-wrap items-start justify-between gap-4"
                 >
-                  <div className="space-y-2 flex-1 min-w-[260px]">
+                  <div className="flex items-start gap-4 flex-1 min-w-[260px]">
+                    {ev.flyer_filename && (
+                      <EventFlyerThumbnail
+                        bandId={activeBand.id}
+                        eventId={ev.id}
+                        eventTitle={ev.title}
+                        flyerFilename={ev.flyer_filename}
+                        size="md"
+                      />
+                    )}
+                    <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-[11px] uppercase font-bold px-2 py-0.5 rounded ${
@@ -319,10 +404,27 @@ export const CalendarPage: React.FC = () => {
                         {conflicts.map((c) => c.user_display_name).join(", ")}
                       </div>
                     )}
+                    </div>
                   </div>
 
-                  {/* Card Actions: Optional Email, Edit, Delete */}
+                  {/* Card Actions: Flyer Download, Optional Email, Edit, Delete */}
                   <div className="flex items-center gap-1">
+                    {ev.flyer_filename && (
+                      <button
+                        onClick={() =>
+                          downloadEventFlyer(
+                            activeBand.id,
+                            ev.id,
+                            ev.title,
+                            ev.flyer_filename!,
+                          ).catch((err) => alert(err.message))
+                        }
+                        title="Download show flyer"
+                        className="p-1.5 hover:bg-zinc-800 text-zinc-300 rounded cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    )}
                     {sysStatus?.smtp_enabled && (
                       <button
                         onClick={async () => {
@@ -575,19 +677,126 @@ export const CalendarPage: React.FC = () => {
               />
             </div>
 
+            {/* Show Flyer / Poster Attachment */}
+            <div className="space-y-2 border-t border-zinc-800 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs text-zinc-400">
+                  Show Flyer / Poster (Optional • JPG, PNG, WebP up to 10 MB)
+                </label>
+                <input
+                  ref={flyerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  onChange={handleSelectFlyerFile}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => flyerInputRef.current?.click()}
+                  className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ImagePlus className="w-3.5 h-3.5 text-amber-400" />
+                  {pendingFlyerFile ||
+                  (editingEvent?.flyer_filename && !removeExistingFlyer)
+                    ? "Replace Flyer"
+                    : "Upload Flyer"}
+                </button>
+              </div>
+
+              {flyerError && (
+                <div className="p-2.5 bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-lg">
+                  {flyerError}
+                </div>
+              )}
+
+              {pendingFlyerPreview && pendingFlyerFile ? (
+                <div className="flex items-center justify-between gap-3 p-2.5 bg-zinc-950 border border-zinc-700 rounded-lg">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={pendingFlyerPreview}
+                      alt="Selected flyer preview"
+                      className="w-12 h-15 object-cover rounded border border-zinc-700 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-zinc-200 truncate">
+                        {pendingFlyerFile.name}
+                      </div>
+                      <div className="text-[11px] text-amber-400">
+                        Ready to upload on save (
+                        {(pendingFlyerFile.size / 1024 / 1024).toFixed(2)} MB)
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearPendingFlyer}
+                    className="text-xs text-red-400 hover:underline shrink-0 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : editingEvent?.flyer_filename && !removeExistingFlyer ? (
+                <div className="flex items-center justify-between gap-3 p-2.5 bg-zinc-950 border border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <EventFlyerThumbnail
+                      bandId={activeBand.id}
+                      eventId={editingEvent.id}
+                      eventTitle={editingEvent.title}
+                      flyerFilename={editingEvent.flyer_filename}
+                      size="sm"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-zinc-200">
+                        Current Show Flyer
+                      </div>
+                      <div className="text-[11px] text-zinc-400">
+                        Click thumbnail to preview or download
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveExistingFlyer(true)}
+                    className="text-xs text-red-400 hover:underline shrink-0 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : editingEvent?.flyer_filename && removeExistingFlyer ? (
+                <div className="flex items-center justify-between p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">
+                  <span>Current flyer will be removed when you save.</span>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveExistingFlyer(false)}
+                    className="underline cursor-pointer"
+                  >
+                    Undo
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setEventModalOpen(false)}
+                onClick={() => {
+                  clearPendingFlyer();
+                  setEventModalOpen(false);
+                }}
                 className="px-4 py-2 bg-zinc-800 rounded-lg text-sm cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-lg text-sm cursor-pointer"
+                disabled={savingEvent}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-lg text-sm cursor-pointer"
               >
-                {editingEvent ? "Save Changes" : "Save Event"}
+                {savingEvent
+                  ? "Saving..."
+                  : editingEvent
+                    ? "Save Changes"
+                    : "Save Event"}
               </button>
             </div>
           </form>

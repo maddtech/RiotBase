@@ -1,6 +1,9 @@
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -16,6 +19,7 @@ from app.schemas.calendar_venues import (
     VenueSaveRequest,
     VenueSearchCandidate,
 )
+from app.services.flyer_storage import delete_flyer_file, resolve_flyer_path, save_verified_flyer
 from app.services.venue_lookup import detect_timezone_from_coords, search_venues_cascade
 
 router = APIRouter(prefix="/api/v1/bands/{band_id}", tags=["venues-and-calendar"])
@@ -276,8 +280,94 @@ def delete_event(
     event = db.query(Event).filter(Event.id == event_id, Event.band_id == membership.band_id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    old_flyer = event.flyer_filename
     db.delete(event)
     db.commit()
+    delete_flyer_file(membership.band_id, old_flyer)
+
+
+@router.post("/events/{event_id}/flyer", response_model=EventOut)
+async def upload_event_flyer(
+    event_id: str,
+    file: UploadFile = File(...),
+    membership: BandMember = Depends(require_band_member),
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(Event)
+        .options(joinedload(Event.venue), joinedload(Event.setlist))
+        .filter(Event.id == event_id, Event.band_id == membership.band_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    new_filename, content_type = await save_verified_flyer(membership.band_id, event.id, file)
+    old_filename = event.flyer_filename
+
+    event.flyer_filename = new_filename
+    event.flyer_content_type = content_type
+    db.commit()
+    db.refresh(event)
+
+    if old_filename and old_filename != new_filename:
+        delete_flyer_file(membership.band_id, old_filename)
+
+    return serialize_event(event)
+
+
+@router.get("/events/{event_id}/flyer")
+def get_event_flyer(
+    event_id: str,
+    download: bool = Query(default=False),
+    membership: BandMember = Depends(require_band_member),
+    db: Session = Depends(get_db),
+):
+    event = db.query(Event).filter(Event.id == event_id, Event.band_id == membership.band_id).first()
+    if not event or not event.flyer_filename:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flyer not found")
+
+    file_path = resolve_flyer_path(membership.band_id, event.flyer_filename)
+    if not file_path or not file_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flyer file not found on disk")
+
+    ext = Path(event.flyer_filename).suffix.lstrip(".") or "jpg"
+    slug = re.sub(r"[^a-z0-9]+", "-", event.title.lower()).strip("-") or "event"
+    friendly_name = f"{slug}-flyer.{ext}"
+    disposition = "attachment" if download else "inline"
+
+    return FileResponse(
+        path=file_path,
+        media_type=event.flyer_content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{friendly_name}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+@router.delete("/events/{event_id}/flyer", response_model=EventOut)
+def delete_event_flyer(
+    event_id: str,
+    membership: BandMember = Depends(require_band_member),
+    db: Session = Depends(get_db),
+):
+    event = (
+        db.query(Event)
+        .options(joinedload(Event.venue), joinedload(Event.setlist))
+        .filter(Event.id == event_id, Event.band_id == membership.band_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    old_filename = event.flyer_filename
+    event.flyer_filename = None
+    event.flyer_content_type = None
+    db.commit()
+    db.refresh(event)
+    delete_flyer_file(membership.band_id, old_filename)
+    return serialize_event(event)
 
 
 # --- MEMBER BLACKOUT DATES (PURE CALENDAR DATES) ---
